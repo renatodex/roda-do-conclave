@@ -1,13 +1,35 @@
 import type { Route } from "./+types/home";
-import { Welcome } from "../welcome/welcome";
+import { ConclaveProvider, useConclave } from "~/context/ConclaveContext";
+import SetupPhase from "~/components/SetupPhase";
+import SessionPhase from "~/components/SessionPhase";
+import EndedPhase from "~/components/EndedPhase";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "New React Router App" },
-    { name: "description", content: "Welcome to React Router!" },
+    { title: "Roda do Conclave — Solium Infernum" },
+    {
+      name: "description",
+      content: "Sistema de reunião do Conclave do Solium Infernum",
+    },
   ];
 }
 
+function ConclaveApp() {
+  const { phase } = useConclave();
+
+  return (
+    <>
+      {phase === "setup" && <SetupPhase />}
+      {phase === "session" && <SessionPhase />}
+      {phase === "ended" && <EndedPhase />}
+    </>
+  );
+}
+
 export default function Home() {
-  return <Welcome />;
+  return (
+    <ConclaveProvider>
+      <ConclaveApp />
+    </ConclaveProvider>
+  );
 }
