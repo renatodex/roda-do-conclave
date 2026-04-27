@@ -10,12 +10,32 @@ function groupLogByRound(speakingLog) {
   return rounds;
 }
 
+const VOTE_LABEL_MD = {
+  favor: "A favor",
+  contra: "Contra",
+  abster: "Abstém-se",
+};
+
+const OUTCOME_LABEL_MD = {
+  approved: "APROVADA",
+  rejected: "REJEITADA",
+  tied: "EMPATE",
+  blocked: "BLOQUEADA pelo Potestade",
+};
+
 function generateMarkdown(state) {
   const presidentArchonte = getArchonte(state.president);
+  const deliberationsByRound = (state.deliberations ?? []).reduce((acc, d) => {
+    (acc[d.round] = acc[d.round] || []).push(d);
+    return acc;
+  }, {});
   const totalRounds = Math.max(
     state.round - 1,
     ...Object.keys(state.roundSummaries).map(Number),
-    ...state.speakingLog.map((e) => e.round)
+    ...state.speakingLog.map((e) => e.round),
+    ...(state.deliberations ?? []).map((d) => d.round),
+    ...(state.agreements ?? []).map((a) => a.round),
+    0
   );
   const logByRound = groupLogByRound(state.speakingLog);
 
@@ -101,6 +121,25 @@ function generateMarkdown(state) {
         md += `\n`;
       }
     }
+
+    const roundDeliberations = deliberationsByRound[r] ?? [];
+    if (roundDeliberations.length > 0) {
+      md += `### Deliberações Vinculantes\n\n`;
+      for (const d of roundDeliberations) {
+        md += `**${d.title}** — ${OUTCOME_LABEL_MD[d.outcome] ?? d.outcome.toUpperCase()}\n`;
+        if (d.description) md += `${d.description}\n`;
+        md += `Apuração: A favor ${d.tally.favor} · Contra ${d.tally.contra} · Abstenção ${d.tally.abster}`;
+        if (d.overridden) md += ` (revertida pelo Conclave após denegação do Potestade)`;
+        md += `\n`;
+        for (const v of d.votes) {
+          const name = getArchonte(v.archonteId)?.name;
+          md += `- ${name} (peso ${v.weight}): ${VOTE_LABEL_MD[v.vote] ?? v.vote}`;
+          if (v.justification) md += ` — “${v.justification}”`;
+          md += `\n`;
+        }
+        md += `\n`;
+      }
+    }
   }
 
   md += `---\n\n`;
@@ -124,7 +163,7 @@ function downloadMarkdown(content, filename) {
 export default function EndedPhase() {
   const state = useConclave();
   const dispatch = useConclaveDispatch();
-  const { president, excluded, agreements, agenda, round, speakingLog, roundSummaries, roundAgendaItems } = state;
+  const { president, excluded, agreements, agenda, round, speakingLog, roundSummaries, roundAgendaItems, deliberations = [] } = state;
   const presidentArchonte = getArchonte(president);
 
   const absentArchontes = Object.entries(excluded)
@@ -139,6 +178,8 @@ export default function EndedPhase() {
     round - 1,
     ...Object.keys(roundSummaries).map(Number),
     ...speakingLog.map((e) => e.round),
+    ...deliberations.map((d) => d.round),
+    ...agreements.map((a) => a.round),
     0
   );
   const logByRound = groupLogByRound(speakingLog);
@@ -246,12 +287,17 @@ export default function EndedPhase() {
         {Array.from({ length: totalRounds }, (_, i) => i + 1).map((r) => {
           const roundLog = logByRound[r] || [];
           const roundAgreements = agreements.filter((a) => a.round === r);
+          const roundDeliberations = deliberations.filter((d) => d.round === r);
           const summary = roundSummaries[r];
           const boundAgendaId = roundAgendaItems[r];
           const boundAgendaItem = boundAgendaId
             ? agenda.find((i) => i.id === boundAgendaId)
             : null;
-          const hasContent = roundLog.length > 0 || summary || roundAgreements.length > 0;
+          const hasContent =
+            roundLog.length > 0 ||
+            summary ||
+            roundAgreements.length > 0 ||
+            roundDeliberations.length > 0;
 
           if (!hasContent) return null;
 
@@ -334,6 +380,93 @@ export default function EndedPhase() {
                   <p className="text-sm text-gray-300 font-body whitespace-pre-wrap bg-gray-950/50 rounded p-3 border border-red-900/10">
                     {summary}
                   </p>
+                </div>
+              )}
+
+              {roundDeliberations.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-xs text-gray-500 uppercase tracking-wider mb-2 font-semibold">
+                    Deliberações Vinculantes
+                  </h3>
+                  <div className="space-y-2">
+                    {roundDeliberations.map((d) => {
+                      const outcomeLabels = {
+                        approved: { label: "Aprovada", tone: "text-green-300 border-green-700/50 bg-green-900/20" },
+                        rejected: { label: "Rejeitada", tone: "text-red-300 border-red-700/50 bg-red-900/20" },
+                        tied: { label: "Empate", tone: "text-gray-300 border-gray-600 bg-gray-800/40" },
+                        blocked: { label: "Bloqueada", tone: "text-red-300 border-red-800 bg-red-950/40" },
+                      }[d.outcome] ?? { label: d.outcome, tone: "text-gray-300 border-gray-600 bg-gray-800/40" };
+                      return (
+                        <div
+                          key={d.id}
+                          className="p-3 bg-gray-950/50 border border-amber-900/30 rounded"
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <h4 className="font-display text-sm text-gray-200 font-semibold">
+                              {d.title}
+                            </h4>
+                            <span
+                              className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border font-display shrink-0 ${outcomeLabels.tone}`}
+                            >
+                              {outcomeLabels.label}
+                            </span>
+                          </div>
+                          {d.description && (
+                            <p className="text-xs text-gray-400 font-body mt-0.5 mb-1.5 italic">
+                              {d.description}
+                            </p>
+                          )}
+                          <div className="text-[11px] text-gray-500 font-body mb-1.5">
+                            A favor {d.tally.favor} · Contra {d.tally.contra} · Abstenção {d.tally.abster}
+                            {d.overridden && (
+                              <span className="text-amber-400 ml-2">↻ revertida pelo Conclave</span>
+                            )}
+                          </div>
+                          <div className="space-y-0.5">
+                            {d.votes.map((v) => {
+                              const a = getArchonte(v.archonteId);
+                              const tone =
+                                v.vote === "favor"
+                                  ? "text-green-400"
+                                  : v.vote === "contra"
+                                    ? "text-red-400"
+                                    : "text-gray-500";
+                              return (
+                                <div
+                                  key={v.archonteId}
+                                  className="flex items-center gap-2 text-[11px]"
+                                >
+                                  <img
+                                    src={a?.avatar}
+                                    alt={a?.name}
+                                    className="w-4 h-4 rounded-full object-cover"
+                                  />
+                                  <span className="font-display text-gray-300">
+                                    {a?.name}
+                                  </span>
+                                  <span className={tone}>
+                                    {v.vote === "favor"
+                                      ? "✓ A favor"
+                                      : v.vote === "contra"
+                                        ? "✕ Contra"
+                                        : "○ Abstém-se"}
+                                  </span>
+                                  <span className="text-gray-700">
+                                    (peso {v.weight})
+                                  </span>
+                                  {v.justification && (
+                                    <span className="text-gray-500 italic truncate">
+                                      — “{v.justification}”
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 

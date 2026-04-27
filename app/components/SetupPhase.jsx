@@ -5,8 +5,8 @@ import SpeakingOrderEditor from "./SpeakingOrderEditor";
 import AgendaSetup from "./AgendaSetup";
 
 const steps = [
-  { key: "president", label: "Presidente" },
   { key: "attendance", label: "Presença" },
+  { key: "president", label: "Potestade" },
   { key: "order", label: "Ordem de Fala" },
   { key: "agenda", label: "Pauta" },
 ];

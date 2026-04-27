@@ -8,6 +8,8 @@ import AgreementModal from "./AgreementModal";
 import ReplyModal from "./ReplyModal";
 import RoundSummaryModal from "./RoundSummaryModal";
 import RoundSummaryPanel from "./RoundSummaryPanel";
+import DeliberationModal from "./DeliberationModal";
+import DeliberationsList from "./DeliberationsList";
 
 export default function SessionPhase() {
   const {
@@ -16,6 +18,7 @@ export default function SessionPhase() {
     showAgreementModal,
     showReplyModal,
     showRoundSummaryModal,
+    showDeliberationModal,
     currentAgendaItemId,
     agenda,
   } = useConclave();
@@ -48,9 +51,9 @@ export default function SessionPhase() {
             })()}
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 text-sm">
-              <span className="text-gray-500 font-body">Presidente:</span>
+              <span className="text-gray-500 font-body">Potestade:</span>
               <span className="inline-flex items-center gap-1.5 text-gray-300 font-display">
                 <img
                   src={presidentArchonte?.avatar}
@@ -60,6 +63,13 @@ export default function SessionPhase() {
                 {presidentArchonte?.name}
               </span>
             </div>
+
+            <button
+              onClick={() => dispatch({ type: "OPEN_DELIBERATION_MODAL" })}
+              className="px-4 py-1.5 bg-amber-900/40 hover:bg-amber-900/60 text-amber-300 text-xs font-display font-semibold rounded border border-amber-900/40 hover:border-amber-700 transition-colors"
+            >
+              ⚖ Deliberação Vinculante
+            </button>
 
             <button
               onClick={() => dispatch({ type: "OPEN_AGREEMENT_MODAL" })}
@@ -90,6 +100,9 @@ export default function SessionPhase() {
         <aside className="space-y-5 overflow-y-auto max-h-[calc(100vh-5rem)]">
           <AgendaPanel />
           <div className="border-t border-red-900/20 pt-4">
+            <DeliberationsList />
+          </div>
+          <div className="border-t border-red-900/20 pt-4">
             <AgreementsList />
           </div>
           <div className="border-t border-red-900/20 pt-4">
@@ -101,6 +114,7 @@ export default function SessionPhase() {
       {showAgreementModal && <AgreementModal />}
       {showReplyModal && <ReplyModal />}
       {showRoundSummaryModal && <RoundSummaryModal />}
+      {showDeliberationModal && <DeliberationModal />}
     </div>
   );
 }

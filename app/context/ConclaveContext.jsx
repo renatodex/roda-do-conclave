@@ -1,11 +1,18 @@
 import { createContext, useContext, useReducer } from "react";
+import {
+  ARCHONTES,
+  getArchonte,
+  pickPotestade,
+  orderForSpeaking,
+} from "~/data/archontes";
 
 const ConclaveContext = createContext(null);
 const ConclaveDispatchContext = createContext(null);
 
 const initialState = {
   phase: "setup",
-  setupStep: "president",
+  setupStep: "attendance",
+  honrariaMode: "highest",
   president: null,
   excluded: {},
   baseSpeakingOrder: [],
@@ -14,11 +21,13 @@ const initialState = {
   currentSpeakerStatus: "waiting",
   agenda: [],
   agreements: [],
+  deliberations: [],
   round: 1,
   currentAgendaItemId: null,
   showAgreementModal: false,
   showReplyModal: false,
   showRoundSummaryModal: false,
+  showDeliberationModal: false,
   pendingRoundEnd: null,
   speakingLog: [],
   roundSummaries: {},
@@ -27,26 +36,42 @@ const initialState = {
 
 let nextAgendaId = 1;
 let nextAgreementId = 1;
+let nextDeliberationId = 1;
 
 function buildRoundQueue(baseSpeakingOrder) {
   return baseSpeakingOrder.map((id) => ({ archonteId: id, type: "regular" }));
 }
 
+function presentIdsFromExcluded(excluded) {
+  return ARCHONTES.filter((a) => !excluded[a.id]).map((a) => a.id);
+}
+
 function conclaveReducer(state, action) {
   switch (action.type) {
-    case "SET_PRESIDENT":
-      return {
-        ...state,
-        president: action.payload,
-        setupStep: "attendance",
-      };
+    case "SET_HONRARIA_MODE":
+      return { ...state, honrariaMode: action.payload };
 
-    case "SET_EXCLUDED":
+    case "SET_EXCLUDED": {
+      const presentIds = presentIdsFromExcluded(action.payload);
+      const suggestedPotestade = pickPotestade(presentIds, state.honrariaMode);
       return {
         ...state,
         excluded: action.payload,
+        president: suggestedPotestade,
+        setupStep: "president",
+      };
+    }
+
+    case "SET_PRESIDENT": {
+      const presentIds = presentIdsFromExcluded(state.excluded);
+      const suggestedOrder = orderForSpeaking(presentIds, action.payload);
+      return {
+        ...state,
+        president: action.payload,
+        baseSpeakingOrder: suggestedOrder,
         setupStep: "order",
       };
+    }
 
     case "SET_SPEAKING_ORDER":
       return {
@@ -262,6 +287,33 @@ function conclaveReducer(state, action) {
         showAgreementModal: false,
       };
 
+    case "OPEN_DELIBERATION_MODAL":
+      return { ...state, showDeliberationModal: true };
+
+    case "CLOSE_DELIBERATION_MODAL":
+      return { ...state, showDeliberationModal: false };
+
+    case "RECORD_DELIBERATION":
+      return {
+        ...state,
+        deliberations: [
+          ...state.deliberations,
+          {
+            id: nextDeliberationId++,
+            round: action.payload.round ?? state.round,
+            title: action.payload.title,
+            description: action.payload.description,
+            potestadeAccepted: action.payload.potestadeAccepted,
+            overridden: action.payload.overridden ?? false,
+            votes: action.payload.votes,
+            tally: action.payload.tally,
+            outcome: action.payload.outcome,
+            timestamp: new Date().toLocaleTimeString("pt-BR"),
+          },
+        ],
+        showDeliberationModal: false,
+      };
+
     case "END_SESSION":
       return {
         ...state,
@@ -271,6 +323,7 @@ function conclaveReducer(state, action) {
     case "RESET":
       nextAgendaId = 1;
       nextAgreementId = 1;
+      nextDeliberationId = 1;
       return { ...initialState };
 
     default:
